@@ -23,28 +23,45 @@ func ApplicationInit() {
 }
 
 func RouterInit(router *gin.Engine) {
+	rootSocket()
+
 	router.GET("/version", src_controllers.Get_Version)
 
 	router.GET("/v0/*any", gin.WrapH(SocketioServer))
 	router.POST("/v0/*any", gin.WrapH(SocketioServer))
-	hessabSocket()
+
 }
 
-func hessabSocket() {
-	SocketioServer.OnConnect("/hessab", func(c socketio.Conn) error {
-		log.Println("connected:", c.ID())
+func rootSocket() {
+	SocketioServer.OnConnect("/", func(s socketio.Conn) error {
+		s.SetContext("")
+		log.Println("connected:", s.ID())
 		return nil
+	})
+
+	SocketioServer.OnEvent("/", "notice", func(s socketio.Conn, msg string) {
+		log.Println("notice:", msg)
+		s.Emit("reply", "have "+msg)
+	})
+
+	SocketioServer.OnEvent("/chat", "msg", func(s socketio.Conn, msg string) string {
+		log.Println("chat:", msg)
+		s.SetContext(msg)
+		return "recv " + msg
+	})
+
+	SocketioServer.OnEvent("/", "bye", func(s socketio.Conn) string {
+		last := s.Context().(string)
+		s.Emit("bye", last)
+		s.Close()
+		return last
 	})
 
 	SocketioServer.OnError("/", func(s socketio.Conn, e error) {
 		log.Println("meet error:", e)
 	})
 
-	SocketioServer.OnEvent("/hessab", "amin", func(s socketio.Conn, msg string) {
-
-	})
-
-	SocketioServer.OnDisconnect("/hessab", func(c socketio.Conn, s string) {
-		log.Println("closed:", s)
+	SocketioServer.OnDisconnect("/", func(s socketio.Conn, reason string) {
+		log.Println("closed", reason)
 	})
 }
