@@ -6,41 +6,38 @@ import (
 	"vazir_hessab/src"
 
 	"github.com/gin-gonic/gin"
+	"github.com/googollee/go-socket.io/engineio"
+	"github.com/googollee/go-socket.io/engineio/transport"
+	"github.com/googollee/go-socket.io/engineio/transport/websocket"
+
 	socketio "github.com/googollee/go-socket.io"
 )
 
-func init() {
-	src.ApplicationInit()
-}
-
 func main() {
-	server := socketio.NewServer(nil)
+	src.ApplicationInit()
 
-	server.OnConnect("/", func(c socketio.Conn) error {
-		log.Println("connected:", c.ID())
-		return nil
+	router := gin.New()
+	src.SocketioServer = socketio.NewServer(&engineio.Options{
+		Transports: []transport.Transport{
+			&websocket.Transport{Subprotocols: []string{"websocket"}},
+		},
 	})
-
-	server.OnEvent("/", "amin", func(s socketio.Conn, msg string) {
-
-	})
-
-	server.OnDisconnect("/", func(c socketio.Conn, s string) {
-		log.Println("closed:", s)
-	})
-
 	go func() {
-		if err := server.Serve(); err != nil {
+		if err := src.SocketioServer.Serve(); err != nil {
 			log.Fatalf("socketio listen error: %s\n", err)
 		}
 	}()
-	defer server.Close()
 
-	router := gin.New()
-	router.Any("/v0", gin.WrapH(server))
+	defer src.SocketioServer.Close()
+
 	src.RouterInit(router)
 
-	if err := router.Run(":" + os.Getenv("PORT")); err != nil {
+	port, exists := os.LookupEnv("PORT")
+	if !exists {
+		port = "3779"
+	}
+
+	if err := router.Run(":" + port); err != nil {
 		log.Fatal("failed run app: ", err)
 	}
 }
